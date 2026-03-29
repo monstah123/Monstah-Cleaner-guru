@@ -27,16 +27,24 @@ jobs:
 
       - name: Add Capacitor iOS Platform
         run: |
-          npx cap add ios
-          npx cap sync ios
+          npx cap add ios || true
+          # Patch Podfile for Capacitor 8.3 (Higher deployment target required)
+          if [ -f ios/App/Podfile ]; then
+            sed -i '' "s/.*platform :ios.*/platform :ios, '15.0'/g" ios/App/Podfile
+            echo "
+            post_install do |installer|
+              installer.pods_project.targets.each do |target|
+                target.build_configurations.each do |config|
+                  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+                end
+              end
+            end" >> ios/App/Podfile
+          fi
 
-      - name: Install Apple Certificate and Provisioning Profile (Placeholder)
-        # This is where we would normally install the certificates.
-        # To get a real .ipa for Transporter, you need to add your secrets to GitHub.
-        run: echo "Skipping signing for now. You will need to add Apple Developer secrets for a full .ipa."
+      - name: Sync Capacitor
+        run: npx cap sync ios
 
       - name: Build Xcode Archive
-        # This will build the app to ensure your code is error-free on iOS.
         run: |
           xcodebuild -workspace ios/App/App.xcworkspace \
                      -scheme App \

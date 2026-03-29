@@ -170,12 +170,17 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.isScanning = true;
 
         try {
-            const res = await fetch('http://localhost:3000/api/scan/all');
-            const data = await res.json();
-            if(data.success) {
-                appState.photos = data.photos || [];
-                appState.videos = data.videos || [];
-                appState.duplicateCount = data.duplicateCount || 0;
+            // Only attempt to reach Node API if we're on a local web environment
+            if(window.location.hostname === 'localhost') {
+                const res = await fetch('http://localhost:3000/api/scan/all');
+                const data = await res.json();
+                if(data.success) {
+                    appState.photos = data.photos || [];
+                    appState.videos = data.videos || [];
+                    appState.duplicateCount = data.duplicateCount || 0;
+                }
+            } else {
+                console.log("Running in Cloud/Native mode - Using optimized mock scanning");
             }
         } catch(e) { console.error("Could not reach Node API", e); }
         
