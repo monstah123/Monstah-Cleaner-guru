@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -29,7 +29,7 @@ jobs:
         run: |
           npx cap add ios || true
           # Patch Podfile for Capacitor 8.3 (Higher deployment target required)
-          if [ -f ios/App/Podfile ]; then
+          if [ -d ios/App/Podfile ]; then
             sed -i '' "s/.*platform :ios.*/platform :ios, '15.0'/g" ios/App/Podfile
             echo "
             post_install do |installer|
