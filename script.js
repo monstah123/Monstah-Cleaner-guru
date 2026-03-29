@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const storageUsedText = document.getElementById('storage-used-text');
     const statusHeadline = document.getElementById('status-headline');
     const btnSmartClean = document.getElementById('btn-smart-clean');
+    const batteryWidget = document.querySelector('.widget:first-child');
     
     // Stats Elements
     const statsPhotos = document.getElementById('stats-photos');
@@ -46,6 +47,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const photosSelectAll = document.getElementById('photos-select-all');
     const photosDeleteBtn = document.getElementById('photos-delete-btn');
 
+    // Vault Elements
+    const vaultAuth = document.getElementById('vault-auth');
+    const vaultContent = document.getElementById('vault-content');
+    const pinDots = document.querySelectorAll('#pin-display .dot');
+    const pinBtns = document.querySelectorAll('.pin-btn:not(.del-btn)');
+    const pinDel = document.getElementById('pin-del');
+    let currentPin = '';
+    const CORRECT_PIN = '1234';
+
+    // Charging Elements
+    const chargingScreen = document.getElementById('screen-charging');
+    const closeCharging = document.getElementById('close-charging');
+
     // List Elements
     const videosList = document.getElementById('videos-list');
     const contactsList = document.getElementById('contacts-list');
@@ -55,11 +69,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Navigation ---
     function navigateTo(screenId) {
         screens.forEach(s => s.classList.remove('active'));
-        document.getElementById(screenId).classList.add('active');
+        const target = document.getElementById(screenId);
+        if(target) target.classList.add('active');
         
         if(screenId === 'screen-photos') renderPhotos();
         if(screenId === 'screen-videos') renderVideos();
         if(screenId === 'screen-contacts') renderContacts();
+        if(screenId === 'screen-secret') resetVault();
     }
 
     featureCards.forEach(card => {
@@ -77,14 +93,66 @@ document.addEventListener('DOMContentLoaded', () => {
         item.addEventListener('click', () => {
             bottomNavItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
-            navigateTo('screen-dashboard'); // Simplified for demo
+            navigateTo('screen-dashboard');
         });
+    });
+
+
+    // --- Vault Logic ---
+    function resetVault() {
+        currentPin = '';
+        updatePinDots();
+        vaultAuth.classList.remove('hidden');
+        vaultContent.classList.add('hidden');
+    }
+
+    function updatePinDots() {
+        pinDots.forEach((dot, index) => {
+            if(index < currentPin.length) dot.classList.add('filled');
+            else dot.classList.remove('filled');
+        });
+    }
+
+    pinBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if(currentPin.length < 4) {
+                currentPin += btn.textContent.trim();
+                updatePinDots();
+                if(currentPin.length === 4) {
+                    if(currentPin === CORRECT_PIN) {
+                        vaultAuth.classList.add('hidden');
+                        vaultContent.classList.remove('hidden');
+                    } else {
+                        // Shake effect
+                        vaultAuth.style.animation = 'none';
+                        void vaultAuth.offsetWidth;
+                        vaultAuth.style.animation = 'shake 0.4s';
+                        currentPin = '';
+                        setTimeout(updatePinDots, 300);
+                    }
+                }
+            }
+        });
+    });
+
+    pinDel.addEventListener('click', () => {
+        currentPin = currentPin.slice(0, -1);
+        updatePinDots();
+    });
+
+    // --- Charging Logic ---
+    batteryWidget.addEventListener('click', () => {
+        chargingScreen.classList.add('active');
+    });
+
+    closeCharging.addEventListener('click', () => {
+        chargingScreen.classList.remove('active');
     });
 
 
     // --- Dashboard logic ---
     function updateStorageUI() {
-        storageUsedText.textContent = `${appState.storageUsed} GB`;
+        storageUsedText.textContent = `${appState.storageUsed.toFixed(1)} GB`;
         const percentage = (appState.storageUsed / appState.storageTotal) * 100;
         storageCircle.setAttribute('stroke-dasharray', `${percentage}, 100`);
         
@@ -194,10 +262,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     photosDeleteBtn.addEventListener('click', async () => {
         const selectedPhotos = appState.photos.filter(p => p.selected);
+        if(selectedPhotos.length === 0) return;
+
         const selectedSize = selectedPhotos.reduce((s, p) => s + p.size, 0);
         
-        if (selectedPhotos.length > 0) {
-            photosDeleteBtn.textContent = 'Deleting...';
+        // Add swipe away animation
+        const items = photosSwipeArea.querySelectorAll('.photo-item.selected');
+        items.forEach((item, index) => {
+            item.classList.add(index % 2 === 0 ? 'swipe-left' : 'swipe-right');
+        });
+
+        photosDeleteBtn.textContent = 'Deleting...';
+        
+        // Wait for animation
+        setTimeout(async () => {
             try {
                 const paths = selectedPhotos.map(p => p.path);
                 await fetch('http://localhost:3000/api/delete/files', {
@@ -206,22 +284,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ filesToDelete: paths })
                 });
             } catch(e) {}
-            photosDeleteBtn.textContent = 'Delete';
-        }
 
-        appState.photos = appState.photos.filter(p => !p.selected);
-        
-        // Mock cleanup
-        appState.storageUsed -= (selectedSize / 1000); // MB to GB rough conversion
-        statsPhotos.textContent = "Clean";
-        statsPhotos.style.color = "var(--accent-green)";
-        
-        updateStorageUI();
-        navigateTo('screen-dashboard');
-        
-        // Reset action bar
-        photosActionBar.classList.remove('visible');
-        setTimeout(() => photosActionBar.classList.add('hidden'), 300);
+            appState.photos = appState.photos.filter(p => !p.selected);
+            appState.storageUsed -= (selectedSize / 1024); // MB to GB
+            
+            photosDeleteBtn.textContent = 'Delete';
+            statsPhotos.textContent = appState.photos.length > 0 ? `${appState.photos.length} Photos` : "Clean";
+            if(appState.photos.length === 0) statsPhotos.style.color = "var(--accent-green)";
+            
+            updateStorageUI();
+            navigateTo('screen-dashboard');
+            
+            // Reset action bar
+            photosActionBar.classList.remove('visible');
+            setTimeout(() => photosActionBar.classList.add('hidden'), 300);
+        }, 400);
     });
 
     // --- Video Logic ---
@@ -250,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     btn.innerHTML = "Compressing...";
                     setTimeout(() => {
                         vid.compressed = true;
-                        appState.storageUsed -= (vid.size * 0.6 / 1000);
+                        appState.storageUsed -= (vid.size * 0.6 / 1024);
                         renderVideos();
                         updateStorageUI();
                         statsVideos.textContent = "Optimized";
